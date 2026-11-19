@@ -24,7 +24,7 @@ from horarios.config import (
     RUTA_ENTRADA,
     SKIP_XLSX_KEYWORDS,
 )
-from horarios.utils import formato_sala
+from horarios.utils import formato_sala, split_lista
 
 # Tipo del mapa de salones: (SEDE, LIGA, letra_día) → "SALA - EDIFICIO"
 SalonesMap = dict[tuple[str, str, str], str]
@@ -39,9 +39,18 @@ def _es_temporal_office(path: str) -> bool:
 
 
 def find_sede_report_excels(workdir=None) -> list[str]:
-    """Reportes individuales por sede: 'Reporte Horarios y Paquetes - Proceso NNN.xlsx'."""
+    """Reportes individuales por sede: 'Reporte Horarios y Paquetes - Proceso NNN.xlsx'.
+
+    Si no hay coincidencias exactas con el patrón, acepta cualquier .xlsx con
+    'reporte horarios' en el nombre.
+    """
     wd = workdir or "."
     files = [f for f in glob.glob(os.path.join(wd, PATRON_REPORTE_SEDE)) if not _es_temporal_office(f)]
+    if not files:
+        files = [
+            f for f in glob.glob(os.path.join(wd, "*.xlsx"))
+            if not _es_temporal_office(f) and "reporte horarios" in os.path.basename(f).lower()
+        ]
     return sorted(files)
 
 
@@ -91,21 +100,50 @@ def _columna_sede(columns) -> str | None:
     return next((c for c in columns if str(c).strip() in COLUMNAS_SEDE), None)
 
 
+def _columna_semanas(columns) -> str | None:
+    return next((c for c in columns if str(c).strip().upper() == "SEMANAS"), None)
+
+
+def _rewind(archivo) -> None:
+    if hasattr(archivo, "seek"):
+        archivo.seek(0)
+
+
 def detect_sedes(archivo) -> list[str]:
-    """Códigos de sede presentes en un Excel (lee ≤1 000 filas).
+    """Códigos de sede presentes en un Excel (lee solo la columna de sede).
 
     `archivo` puede ser una ruta o un objeto tipo archivo (p. ej. un upload de
     Streamlit); en ese caso se rebobina para poder leerlo de nuevo después.
     """
     try:
-        df = pd.read_excel(archivo, engine="openpyxl", nrows=1000)
-        if hasattr(archivo, "seek"):
-            archivo.seek(0)
-        col = _columna_sede(df.columns)
+        _rewind(archivo)
+        header = pd.read_excel(archivo, engine="openpyxl", nrows=0)
+        _rewind(archivo)
+        col = _columna_sede(header.columns)
         if col is not None:
-            return sorted(df[col].dropna().astype(str).unique().tolist())
+            df = pd.read_excel(archivo, engine="openpyxl", usecols=[col])
+            _rewind(archivo)
+            sedes = df[col].dropna().astype(str).str.strip()
+            return sorted(s for s in sedes.unique().tolist() if s)
     except Exception:
-        pass
+        _rewind(archivo)
+    return []
+
+
+def detect_semanas(archivo) -> list[str]:
+    """Valores únicos de la columna `SEMANAS` en un Excel (lee solo esa columna)."""
+    try:
+        _rewind(archivo)
+        header = pd.read_excel(archivo, engine="openpyxl", nrows=0)
+        _rewind(archivo)
+        col = _columna_semanas(header.columns)
+        if col is not None:
+            df = pd.read_excel(archivo, engine="openpyxl", usecols=[col])
+            _rewind(archivo)
+            vals = df[col].dropna().astype(str).str.strip()
+            return sorted(v for v in vals.unique().tolist() if v and v.lower() not in ("nan", "none", "<na>"))
+    except Exception:
+        _rewind(archivo)
     return []
 
 
@@ -116,7 +154,7 @@ def _sedes_en_archivo(path: str) -> set[str]:
     if col is None:
         return set()
     series = pd.read_excel(path, usecols=[col], engine="openpyxl")[col]
-    return set(series.dropna().astype(str).unique())
+    return {s for s in series.dropna().astype(str).str.strip().unique() if s}
 
 
 # ═════════════════════════════════════════════════════════════
@@ -127,11 +165,16 @@ def load_data(path: str) -> pd.DataFrame:
     """Lee un Excel y renombra sus columnas al esquema interno."""
     df = pd.read_excel(path, engine="openpyxl")
     df.columns = [str(c).strip() for c in df.columns]
-    return df.rename(columns=COLUMNAS_INTERNAS)
+    df = df.rename(columns=COLUMNAS_INTERNAS)
+    if "SEDE" in df.columns:
+        mask = df["SEDE"].notna()
+        df.loc[mask, "SEDE"] = df.loc[mask, "SEDE"].astype(str).str.strip()
+    return df
 
 
 def _filtrar_sedes(df: pd.DataFrame, sedes: set[str]) -> pd.DataFrame:
-    return df[df["SEDE"].astype(str).isin(sedes)].copy()
+    sedes_norm = {str(s).strip() for s in sedes}
+    return df[df["SEDE"].astype(str).str.strip().isin(sedes_norm)].copy()
 
 
 def load_data_unificado(path_entrada=None, sedes_filtro=None, workdir=None) -> pd.DataFrame:
@@ -223,7 +266,8 @@ def load_salones_por_liga_dia(sedes_filtro=None, workdir=None) -> SalonesMap:
             logging.warning("Secciones %s: faltan columnas %s; se omite este archivo.", f, faltantes)
             continue
         if sedes_f:
-            df = df[df["SEDE"].astype(str).isin(sedes_f)]
+            sedes_norm = {str(s).strip() for s in sedes_f}
+            df = df[df["SEDE"].astype(str).str.strip().isin(sedes_norm)]
 
         col_edificio = next(
             (c for c in df.columns if str(c).strip().upper() in ("EDIFICIO", "EDIFICIO ASIGNADO")),
@@ -241,10 +285,12 @@ def load_salones_por_liga_dia(sedes_filtro=None, workdir=None) -> SalonesMap:
             if not texto_sala:
                 continue
 
-            key = (str(r.get("SEDE")), str(r.get("LIGAS")).strip(), letra)
-            if key in mapa and mapa[key] != texto_sala:
-                conflictos.add(key)
-            mapa[key] = texto_sala  # si hay filas duplicadas que difieren, gana la última
+            sede_val = str(r.get("SEDE")).strip()
+            for liga in split_lista(r.get("LIGAS")):
+                key = (sede_val, liga, letra)
+                if key in mapa and mapa[key] != texto_sala:
+                    conflictos.add(key)
+                mapa[key] = texto_sala  # si hay filas duplicadas que difieren, gana la última
 
     if conflictos:
         logging.warning(

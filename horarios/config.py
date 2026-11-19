@@ -7,6 +7,8 @@ turnos, rutas de recursos) vive aquí para no tener valores mágicos repartidos
 por el código.
 """
 import os
+import re
+from typing import Iterable
 
 # ── Rutas de recursos (plantilla HTML y logo) ───────────────
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -113,83 +115,82 @@ TURNOS = {
 }
 
 # ── Sedes y grupos de semanas ───────────────────────────────
-SEDES_CONOCIDAS = ["ARA", "CUA", "IZT", "PUE", "RPA", "TLA", "TOR", "TPN"]
+# Las sedes se detectan dinámicamente desde los archivos de entrada.
+SEDES_CONOCIDAS: list[str] = []
 
-# Semanas de materias semestrales (se imparten a lo largo de todo el periodo)
-SEMANAS_SEMESTRALES = {"(1 - 15)", "(1 - 16)"}
+# Semanas de materias de ciclo completo (respaldo por defecto: calendario de 14 semanas)
+SEMANAS_SEMESTRALES = {"(1 - 14)"}
 
 # ── Jerarquía de carpetas y periodos por tipo de horario ─────
-# Estructura de salida:
-#   profesor/ -> 1_8, 9_16  (1_8 y 9_16 incluyen materias de 1_16)
-#   sala/     -> 1_8, 9_16  (1_8 y 9_16 incluyen ocupaciones de 1_16)
-#   grupo/    -> 1_16, 1_8, 9_16
+# Valores por defecto (se recalculan dinámicamente con `construir_periodos()`
+# a partir de los rangos reales presentes en la columna SEMANAS del Excel).
+#   profesor/ -> módulos (cada uno integra materias del ciclo completo si existen)
+#   sala/     -> módulos (cada uno integra ocupaciones del ciclo completo si existen)
+#   grupo/    -> ciclo completo (si existe) + cada módulo
 
-# 1) PROFESOR: 1_8 y 9_16 (unen materias modulares con las semestrales)
 PERIODOS_PROFESOR = [
     {
-        "id": "1_8",
-        "nombre": "Semanas 1 – 8",
-        "subtitulo": "Módulo 1 (Semanas 1–8)",
-        "filtro": {"(1 - 8)"} | SEMANAS_SEMESTRALES,
+        "id": "1_7",
+        "nombre": "Semanas 1 – 7",
+        "subtitulo": "Módulo 1 (Semanas 1–7)",
+        "filtro": {"(1 - 7)"} | SEMANAS_SEMESTRALES,
         "vacias": True,
     },
     {
-        "id": "9_16",
-        "nombre": "Semanas 9 – 16",
-        "subtitulo": "Módulo 2 (Semanas 9–16)",
-        "filtro": {"(9 - 15)", "(9 - 16)"} | SEMANAS_SEMESTRALES,
+        "id": "8_14",
+        "nombre": "Semanas 8 – 14",
+        "subtitulo": "Módulo 2 (Semanas 8–14)",
+        "filtro": {"(8 - 14)"} | SEMANAS_SEMESTRALES,
         "vacias": True,
     },
 ]
 
-# 2) SALA: 1_8 y 9_16 (unen ocupaciones modulares con las ocupaciones de 1_16)
 PERIODOS_SALA = [
     {
-        "id": "1_8",
-        "nombre": "Semanas 1 – 8",
-        "subtitulo": "Módulo 1 (Semanas 1–8)",
-        "filtro": {"(1 - 8)"} | SEMANAS_SEMESTRALES,
+        "id": "1_7",
+        "nombre": "Semanas 1 – 7",
+        "subtitulo": "Módulo 1 (Semanas 1–7)",
+        "filtro": {"(1 - 7)"} | SEMANAS_SEMESTRALES,
         "vacias": True,
     },
     {
-        "id": "9_16",
-        "nombre": "Semanas 9 – 16",
-        "subtitulo": "Módulo 2 (Semanas 9–16)",
-        "filtro": {"(9 - 15)", "(9 - 16)"} | SEMANAS_SEMESTRALES,
+        "id": "8_14",
+        "nombre": "Semanas 8 – 14",
+        "subtitulo": "Módulo 2 (Semanas 8–14)",
+        "filtro": {"(8 - 14)"} | SEMANAS_SEMESTRALES,
         "vacias": True,
     },
 ]
 
-# 3) GRUPO: 1_16, 1_8, 9_16 (bloques UTEG)
 PERIODOS_GRUPO = [
     {
-        "id": "1_16",
-        "nombre": "Semanas 1 – 16",
-        "subtitulo": "Semanas 1–16",
-        "filtro": {"(1 - 15)", "(1 - 16)"},
+        "id": "1_14",
+        "nombre": "Semanas 1 – 14",
+        "subtitulo": "Semanas 1–14",
+        "filtro": {"(1 - 14)"},
         "vacias": True,
     },
     {
-        "id": "1_8",
-        "nombre": "Semanas 1 – 8",
-        "subtitulo": "Semanas 1–8",
-        "filtro": {"(1 - 8)"},
+        "id": "1_7",
+        "nombre": "Semanas 1 – 7",
+        "subtitulo": "Semanas 1–7",
+        "filtro": {"(1 - 7)"},
         "vacias": False,
     },
     {
-        "id": "9_16",
-        "nombre": "Semanas 9 – 16",
-        "subtitulo": "Semanas 9–16",
-        "filtro": {"(9 - 15)", "(9 - 16)"},
+        "id": "8_14",
+        "nombre": "Semanas 8 – 14",
+        "subtitulo": "Semanas 8–14",
+        "filtro": {"(8 - 14)"},
         "vacias": False,
     },
 ]
 
-# Opciones para el selector de semanas de la interfaz web (Paso 3)
+# Opciones por defecto para el selector de semanas de la interfaz web (Paso 3)
 GRUPOS_SEMANAS = [
-    {"id": "1_16", "nombre": "Semanas 1 – 16"},
-    {"id": "1_8", "nombre": "Semanas 1 – 8"},
-    {"id": "9_16", "nombre": "Semanas 9 – 16"},
+    {"id": "1_14", "nombre": "Semanas 1 – 14"},
+    {"id": "1_7", "nombre": "Semanas 1 – 7"},
+    {"id": "8_14", "nombre": "Semanas 8 – 14"},
 ]
 
 # Categorías principales de salida
@@ -197,6 +198,167 @@ CATEGORIAS_HORARIO = ("profesor", "sala", "grupo")
 
 # Alias de compatibilidad hacia atrás
 MODULOS_DOCENTES = PERIODOS_PROFESOR
+
+
+# ── Construcción dinámica de periodos a partir de SEMANAS ───
+_RE_RANGO_SEMANAS = re.compile(r"^\(?\s*(\d+)\s*[-–]\s*(\d+)\s*\)?$")
+_RE_PERIODO_ID = re.compile(r"^(\d+)_(\d+)$")
+
+
+def parsear_rango_semanas(valor: str) -> tuple[int, int] | None:
+    """'(1 - 7)' → (1, 7); None si no corresponde a un rango numérico."""
+    m = _RE_RANGO_SEMANAS.match(str(valor).strip())
+    if not m:
+        return None
+    ini, fin = int(m.group(1)), int(m.group(2))
+    return (ini, fin) if ini <= fin else (fin, ini)
+
+
+def etiqueta_periodo(period_id: str) -> str:
+    """'1_7' → 'Semanas 1–7', 'general' → 'Todas las semanas'."""
+    if period_id == "general":
+        return "Todas las semanas"
+    m = _RE_PERIODO_ID.match(str(period_id).strip())
+    if m:
+        return f"Semanas {m.group(1)}–{m.group(2)}"
+    return str(period_id)
+
+
+def construir_periodos(semanas_values: Iterable | None) -> dict[str, list[dict]]:
+    """Construye los periodos de `profesor`, `sala`, `grupo` y `grupos_semanas`
+    dinámicamente a partir de los valores reales presentes en la columna `SEMANAS`.
+
+    Soporta cualquier calendario académico (14 semanas: 1–7 / 8–14 / 1–14;
+    16 semanas: 1–8 / 9–16 / 1–16; 12 semanas; periodo único; o sin columna SEMANAS).
+    """
+    valores_limpios: list[str] = []
+    seen: set[str] = set()
+    if semanas_values is not None:
+        for v in semanas_values:
+            if v is None:
+                continue
+            s = str(v).strip()
+            if not s or s.lower() in ("nan", "none", "<na>"):
+                continue
+            if s not in seen:
+                seen.add(s)
+                valores_limpios.append(s)
+
+    if not valores_limpios:
+        unico = {
+            "id": "general",
+            "nombre": "Todas las semanas",
+            "subtitulo": None,
+            "filtro": set(),
+            "vacias": True,
+        }
+        return {
+            "profesor": [dict(unico)],
+            "sala": [dict(unico)],
+            "grupo": [dict(unico)],
+            "grupos_semanas": [{"id": "general", "nombre": "Todas las semanas"}],
+        }
+
+    # Separar rangos numéricos "(ini - fin)" de posibles etiquetas textuales
+    por_rango: dict[tuple[int, int], set[str]] = {}
+    otros: list[str] = []
+    for s in valores_limpios:
+        rango = parsear_rango_semanas(s)
+        if rango is not None:
+            por_rango.setdefault(rango, set()).add(s)
+        else:
+            otros.append(s)
+
+    # Agrupar rangos equivalentes que solo difieren en la última semana (ej. 1-15 y 1-16, o 9-15 y 9-16)
+    rangos_unificados: dict[tuple[int, int], set[str]] = {}
+    if por_rango:
+        max_fin = max(fin for _, fin in por_rango)
+        for (ini, fin), etiquetas in sorted(por_rango.items()):
+            destino = (ini, max_fin) if (fin == max_fin - 1 and (ini, max_fin) in por_rango) else (ini, fin)
+            rangos_unificados.setdefault(destino, set()).update(etiquetas)
+
+    # Clasificar rangos en ciclo completo vs modulares
+    completos: list[tuple[tuple[int, int], set[str]]] = []
+    modulares: list[tuple[tuple[int, int], set[str]]] = []
+    if rangos_unificados:
+        min_ini = min(ini for ini, _ in rangos_unificados)
+        max_fin = max(fin for _, fin in rangos_unificados)
+        tiene_submodulos = any(
+            (ini > min_ini or fin < max_fin) for (ini, fin) in rangos_unificados
+        )
+        for (ini, fin), filtro in sorted(rangos_unificados.items()):
+            if tiene_submodulos and ini == min_ini and fin == max_fin:
+                completos.append(((ini, fin), filtro))
+            else:
+                modulares.append(((ini, fin), filtro))
+
+    filtro_completo: set[str] = set().union(*(f for _, f in completos)) if completos else set()
+    periodos_profesor: list[dict] = []
+    periodos_sala: list[dict] = []
+    periodos_grupo: list[dict] = []
+
+    # 1) Ciclo completo en `grupo/` (si existe)
+    for (ini, fin), filtro in completos:
+        periodos_grupo.append({
+            "id": f"{ini}_{fin}",
+            "nombre": f"Semanas {ini} – {fin}",
+            "subtitulo": f"Semanas {ini}–{fin}",
+            "filtro": set(filtro),
+            "vacias": True,
+        })
+
+    # 2) Módulos (o rango único si no hay submódulos)
+    es_multimodulo = len(modulares) > 1 or bool(completos)
+    for idx, ((ini, fin), filtro) in enumerate(modulares, start=1):
+        pid = f"{ini}_{fin}"
+        nombre = f"Semanas {ini} – {fin}"
+        subtitulo_mod = f"Módulo {idx} (Semanas {ini}–{fin})" if es_multimodulo else f"Semanas {ini}–{fin}"
+        filtro_integrado = set(filtro) | filtro_completo
+
+        periodos_profesor.append({
+            "id": pid,
+            "nombre": nombre,
+            "subtitulo": subtitulo_mod,
+            "filtro": set(filtro_integrado),
+            "vacias": True,
+        })
+        periodos_sala.append({
+            "id": pid,
+            "nombre": nombre,
+            "subtitulo": subtitulo_mod,
+            "filtro": set(filtro_integrado),
+            "vacias": True,
+        })
+        periodos_grupo.append({
+            "id": pid,
+            "nombre": nombre,
+            "subtitulo": f"Semanas {ini}–{fin}",
+            "filtro": set(filtro),
+            "vacias": not es_multimodulo,
+        })
+
+    # 3) Etiquetas no numéricas (si aparecieran)
+    for etiqueta in sorted(otros):
+        pid = re.sub(r'[\\/*?"<>| ]', "_", etiqueta)
+        entrada = {
+            "id": pid,
+            "nombre": etiqueta,
+            "subtitulo": etiqueta,
+            "filtro": {etiqueta},
+            "vacias": False,
+        }
+        periodos_profesor.append(dict(entrada))
+        periodos_sala.append(dict(entrada))
+        periodos_grupo.append(dict(entrada))
+
+    grupos_semanas = [{"id": p["id"], "nombre": p["nombre"]} for p in periodos_grupo]
+
+    return {
+        "profesor": periodos_profesor,
+        "sala": periodos_sala,
+        "grupo": periodos_grupo,
+        "grupos_semanas": grupos_semanas,
+    }
 
 
 

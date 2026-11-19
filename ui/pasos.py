@@ -9,8 +9,13 @@ import traceback
 import streamlit as st
 import streamlit.components.v1 as components
 
-from horarios.carga import detect_sedes
-from horarios.config import GRUPOS_SEMANAS, SEDES_CONOCIDAS
+from horarios.carga import detect_sedes, detect_semanas
+from horarios.config import (
+    GRUPOS_SEMANAS,
+    SEDES_CONOCIDAS,
+    construir_periodos,
+    etiqueta_periodo,
+)
 from horarios.pipeline import carpeta_sede
 from ui.auth import logout
 from ui.descarga import show_download_dialog
@@ -77,16 +82,18 @@ def step_2_sedes(reporte):
 
     detected = detect_sedes(reporte) if reporte else []
     options = sorted(set(SEDES_CONOCIDAS + detected))
-    defaults = [s for s in (detected or ["TOR"]) if s in options]
+    defaults = [s for s in detected if s in options]
 
     sel = st.multiselect("Sedes disponibles", options, default=defaults)
-    custom = st.text_input("Agregar sede personalizada (código)", placeholder="Ej: MTY")
+    custom = st.text_input("Agregar sede personalizada (código)", placeholder="Ej: AME")
     sedes_final: set[str] = set(sel)
     if custom and custom.strip():
         sedes_final.add(custom.strip().upper())
 
     if sedes_final:
         st.success(f"✔ Sedes seleccionadas: **{', '.join(sorted(sedes_final))}**")
+    elif not reporte:
+        st.info("Suba el reporte en el Paso 1 para detectar sedes automáticamente")
     else:
         st.info("Seleccione al menos una sede")
 
@@ -94,13 +101,26 @@ def step_2_sedes(reporte):
     return sedes_final
 
 
-def step_3_weeks():
+def step_3_weeks(reporte=None):
     """Paso 3: Selección de bloques y grupos de semanas."""
     render_step_card_start(3, "📅 Seleccionar semanas")
 
+    semanas_detectadas = detect_semanas(reporte) if reporte else []
+    if semanas_detectadas:
+        periodos = construir_periodos(semanas_detectadas)
+        grupos_disponibles = periodos["grupos_semanas"]
+        ids_prof = ", ".join(f"`{p['id']}`" for p in periodos["profesor"])
+        ids_sala = ", ".join(f"`{p['id']}`" for p in periodos["sala"])
+        ids_grupo = ", ".join(f"`{p['id']}`" for p in periodos["grupo"])
+    else:
+        grupos_disponibles = GRUPOS_SEMANAS
+        ids_prof = "`1_7`, `8_14`"
+        ids_sala = "`1_7`, `8_14`"
+        ids_grupo = "`1_14`, `1_7`, `8_14`"
+
     active: list[dict] = []
-    gcols = st.columns(len(GRUPOS_SEMANAS))
-    for gcol, g in zip(gcols, GRUPOS_SEMANAS):
+    gcols = st.columns(max(1, len(grupos_disponibles)))
+    for gcol, g in zip(gcols, grupos_disponibles):
         with gcol:
             if st.checkbox(g["nombre"], value=True, key=f"g_{g['id']}"):
                 active.append(g)
@@ -112,9 +132,9 @@ def step_3_weeks():
 
     st.caption(
         "ℹ️ **Estructura organizada de salida:**\n"
-        "- **profesor/**: `1_8` y `9_16` (materias modulares combinadas con semestrales 1–16)\n"
-        "- **sala/**: `1_8` y `9_16` (ocupaciones modulares y ocupaciones semestrales 1–16)\n"
-        "- **grupo/**: `1_16`, `1_8` y `9_16` (bloques UTEG)"
+        f"- **profesor/**: {ids_prof} (materias modulares integradas con ciclo completo si existe)\n"
+        f"- **sala/**: {ids_sala} (ocupaciones modulares integradas con ciclo completo si existe)\n"
+        f"- **grupo/**: {ids_grupo} (bloques UTEG)"
     )
 
     render_step_connector()
@@ -239,11 +259,11 @@ def step_6_preview():
 
     tabs = st.tabs(res_sedes)
 
-    nombres_periodo = {
-        "1_16": "Semanas 1–16",
-        "1_8": "Semanas 1–8 (Módulo 1)",
-        "9_16": "Semanas 9–16 (Módulo 2)",
-    }
+    def _sort_key_periodo(d: pathlib.Path):
+        partes = d.name.split("_")
+        if len(partes) == 2 and all(p.isdigit() for p in partes):
+            return (0, int(partes[0]), int(partes[1]))
+        return (1, d.name, 0)
 
     for tab, sede in zip(tabs, res_sedes):
         with tab:
@@ -275,7 +295,7 @@ def step_6_preview():
                 d for d in cat_dir.iterdir()
                 if d.is_dir() and any(d.glob("*.html"))
             ]
-            subfolders.sort(key=lambda d: d.name)
+            subfolders.sort(key=_sort_key_periodo)
 
             if not subfolders:
                 st.info(f"No hay archivos en la categoría {tipo_sel.lower()}.")
@@ -286,7 +306,7 @@ def step_6_preview():
                 periodo_dir = st.selectbox(
                     "Periodo / Semanas:",
                     subfolders,
-                    format_func=lambda d: nombres_periodo.get(d.name, d.name),
+                    format_func=lambda d: etiqueta_periodo(d.name),
                     key=f"per_{sede}_{folder_name}",
                 )
 
@@ -321,7 +341,7 @@ def render_main_app():
     render_header()
     reporte, secciones = step_1_upload()
     sedes_final = step_2_sedes(reporte)
-    active = step_3_weeks()
+    active = step_3_weeks(reporte)
     step_4_generate(reporte, secciones, sedes_final, active)
     step_5_downloads()
     step_6_preview()

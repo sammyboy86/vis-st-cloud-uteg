@@ -29,10 +29,8 @@ from horarios.carga import load_data, load_data_unificado, load_salones_por_liga
 from horarios.config import (
     CATEGORIAS_HORARIO,
     LOGO_FILE,
-    PERIODOS_GRUPO,
-    PERIODOS_PROFESOR,
-    PERIODOS_SALA,
     TEMPLATE_FILE,
+    construir_periodos,
 )
 from horarios.reportes_excel import (
     generar_reporte_mapeo_bloques,
@@ -99,6 +97,9 @@ def generar_reportes(
 
     from horarios.pipeline import filtrar_semanas
 
+    semanas_col = df["SEMANAS"] if "SEMANAS" in df.columns else None
+    periodos = construir_periodos(semanas_col)
+
     for sede in sorted(df["SEDE"].dropna().astype(str).unique()):
         carpeta = carpeta_salida(wd, sede)
         shutil.rmtree(carpeta, ignore_errors=True)
@@ -109,11 +110,12 @@ def generar_reportes(
         # 1. PROFESOR
         if "profesor" in vistas_set:
             dir_prof = carpeta / "profesor"
-            dir_prof.mkdir(parents=True, exist_ok=True)
-            for p in PERIODOS_PROFESOR:
+            for p in periodos["profesor"]:
+                df_p = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+                if df_p.empty:
+                    continue
                 out_p = dir_prof / p["id"]
                 out_p.mkdir(parents=True, exist_ok=True)
-                df_p = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
                 ctx_p = ContextoSede(
                     sede=sede,
                     df=df_p,
@@ -123,14 +125,15 @@ def generar_reportes(
                 )
                 generar_vista_docentes(ctx_p, out_p, modulo_nombre=p.get("subtitulo"))
 
-        # 2. SALA (incluye ocupaciones de 1_16)
+        # 2. SALA
         if "sala" in vistas_set:
             dir_sala = carpeta / "sala"
-            dir_sala.mkdir(parents=True, exist_ok=True)
-            for p in PERIODOS_SALA:
+            for p in periodos["sala"]:
+                df_s = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+                if df_s.empty:
+                    continue
                 out_s = dir_sala / p["id"]
                 out_s.mkdir(parents=True, exist_ok=True)
-                df_s = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
                 ctx_s = ContextoSede(
                     sede=sede,
                     df=df_s,
@@ -143,11 +146,12 @@ def generar_reportes(
         # 3. GRUPO
         if "grupo" in vistas_set:
             dir_grupo = carpeta / "grupo"
-            dir_grupo.mkdir(parents=True, exist_ok=True)
-            for p in PERIODOS_GRUPO:
+            for p in periodos["grupo"]:
+                df_g = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+                if df_g.empty:
+                    continue
                 out_g = dir_grupo / p["id"]
                 out_g.mkdir(parents=True, exist_ok=True)
-                df_g = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
                 ctx_g = ContextoSede(
                     sede=sede,
                     df=df_g,

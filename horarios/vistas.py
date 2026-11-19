@@ -41,7 +41,7 @@ class ContextoSede:
     def resolver_salon(self, row: pd.Series, dia: str) -> str | None:
         """Salón real de la sesión (reporte Secciones) o, si falta, el salón único de la liga."""
         liga = str(row.get("LIGA")).strip()
-        sala = self.salones_map.get((str(self.sede), liga, dia))
+        sala = self.salones_map.get((str(self.sede).strip(), liga, dia))
         if sala is None and pd.notna(row.get("SALA")):
             sala = formato_sala(row.get("SALA"), row.get("EDIFICIO"))
         return sala
@@ -95,9 +95,14 @@ def _bloques_de_fila(row: pd.Series) -> list[str]:
     return [tok.strip() for tok in str(row.get("UTEG_BLOCK", "")).split(",") if str(tok).strip()]
 
 
-def _hora_fin(fines: list[str]) -> str:
-    """La grilla llega al menos hasta HORA_FIN, o más si alguna sesión termina después."""
-    return max(max(fines), HORA_FIN) if fines else HORA_FIN
+def _hora_ini(inicios: list[str], base: str = HORA_INICIO) -> str:
+    """La grilla empieza al menos en `base`, o antes si alguna sesión comienza antes."""
+    return min(min(inicios), base) if inicios else base
+
+
+def _hora_fin(fines: list[str], base: str = HORA_FIN) -> str:
+    """La grilla llega al menos hasta `base`, o más si alguna sesión termina después."""
+    return max(max(fines), base) if fines else base
 
 
 # ═════════════════════════════════════════════════════════════
@@ -126,17 +131,21 @@ def generar_vista_bloques(
         dfg = df[mask]
 
         turno = valor_predominante(dfg["JORNADA"], "GEN")
-        h_ini, h_fin = TURNOS.get(str(turno), (HORA_INICIO, HORA_FIN))
+        base_ini, base_fin = TURNOS.get(str(turno), (HORA_INICIO, HORA_FIN))
 
         contenido = _nuevo_contenido("docentes", "sala", "asig", "alias")
+        inicios, fines = [], []
         for _, r in dfg.iterrows():
             for d, start, end in parse_group_schedule(r["GROUP_SCHEDULE"]):
+                inicios.append(start)
+                fines.append(end)
                 clave = (DIA_LETRA.get(d, d), start, end)
                 _agregar(contenido, clave, "docentes", _texto(r, "DOCENTE_NOMBRE"))
                 _agregar(contenido, clave, "sala", ctx.resolver_salon(r, d) or None)
                 _agregar(contenido, clave, "asig", _texto(r, "ASIGNATURA"))
                 _agregar(contenido, clave, "alias", _texto(r, "NOMBRE"))
 
+        h_ini, h_fin = _hora_ini(inicios, base_ini), _hora_fin(fines, base_fin)
         grid = construir_grilla(contenido, h_ini, h_fin, _celda_bloque)
         # Se usa el identificador original del bloque para evitar colisiones entre variantes.
         html = ctx.render(turno, bloque, grid, subtitulo_turno=subtitulo_turno)
@@ -173,8 +182,13 @@ def generar_vista_docentes(
         nombres = dfd["DOCENTE_NOMBRE"].dropna()
         doc_nombre = nombres.mode().iat[0] if not nombres.empty else str(doc_id)
 
-        fines = [e for gs in dfd["GROUP_SCHEDULE"].dropna().astype(str) for (_, _, e) in parse_group_schedule(gs)]
-        h_ini, h_fin = HORA_INICIO, _hora_fin(fines)
+        sesiones_doc = [
+            (s, e)
+            for gs in dfd["GROUP_SCHEDULE"].dropna().astype(str)
+            for (_, s, e) in parse_group_schedule(gs)
+        ]
+        h_ini = _hora_ini([s for s, _ in sesiones_doc])
+        h_fin = _hora_fin([e for _, e in sesiones_doc])
 
         contenido = _nuevo_contenido("bloques", "asig", "alias", "sala")
         for _, r in dfd.iterrows():
@@ -233,7 +247,8 @@ def generar_vista_salones(
                 sesiones_por_salon[salon].append((d, start, end, r))
 
     for salon, sesiones in sorted(sesiones_por_salon.items()):
-        h_ini, h_fin = HORA_INICIO, _hora_fin([end for (_, _, end, _) in sesiones])
+        h_ini = _hora_ini([start for (_, start, _, _) in sesiones])
+        h_fin = _hora_fin([end for (_, _, end, _) in sesiones])
 
         contenido = _nuevo_contenido("bloques", "asig", "alias", "docentes")
         for d, start, end, r in sesiones:

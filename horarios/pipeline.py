@@ -31,10 +31,8 @@ import pandas as pd
 from horarios.carga import load_data_unificado, load_salones_por_liga_dia
 from horarios.config import (
     LOGO_FILE,
-    PERIODOS_GRUPO,
-    PERIODOS_PROFESOR,
-    PERIODOS_SALA,
     TEMPLATE_FILE,
+    construir_periodos,
 )
 from horarios.reportes_excel import (
     generar_reporte_mapeo_bloques,
@@ -65,6 +63,8 @@ def filtrar_semanas(
     if "SEMANAS" not in df.columns:
         return df
     semanas_norm = {str(s).strip() for s in semanas}
+    if not semanas_norm and incluir_vacias:
+        return df.copy()
     val_norm = df["SEMANAS"].astype(str).str.strip()
     mask = val_norm.isin(semanas_norm)
     if incluir_vacias:
@@ -103,19 +103,33 @@ def generar_por_grupos_semanas(
         logo_path = pathlib.Path(LOGO_FILE)
     logo_b64 = logo_data_uri(logo_path)
 
-    # 2. Determinar periodos activos según selección
-    active_ids = {g["id"] for g in grupos} if grupos else {"1_16", "1_8", "9_16"}
+    # 2. Determinar periodos dinámicamente según las semanas presentes en el archivo
+    semanas_col = df_total["SEMANAS"] if "SEMANAS" in df_total.columns else None
+    periodos = construir_periodos(semanas_col)
 
-    # Grupo maneja 1_16, 1_8 y 9_16
-    periodos_grupo = [p for p in PERIODOS_GRUPO if p["id"] in active_ids]
+    if grupos:
+        active_ids = {g["id"] for g in grupos}
+        periodos_grupo = [p for p in periodos["grupo"] if p["id"] in active_ids]
+        mod_prof = [p for p in periodos["profesor"] if p["id"] in active_ids]
+        mod_sala = [p for p in periodos["sala"] if p["id"] in active_ids]
 
-    # Profesor y Sala manejan 1_8 y 9_16 (ambos incluyen semanas 1–16)
-    if {"1_8", "9_16"} & active_ids:
-        periodos_profesor = [p for p in PERIODOS_PROFESOR if p["id"] in active_ids]
-        periodos_sala = [p for p in PERIODOS_SALA if p["id"] in active_ids]
+        if not periodos_grupo and not mod_prof and not mod_sala:
+            logging.warning(
+                "Los grupos seleccionados (%s) no coinciden con las semanas detectadas (%s); "
+                "se usarán todos los periodos detectados automáticamente.",
+                sorted(active_ids),
+                [p["id"] for p in periodos["grupo"]],
+            )
+            periodos_grupo = list(periodos["grupo"])
+            periodos_profesor = list(periodos["profesor"])
+            periodos_sala = list(periodos["sala"])
+        else:
+            periodos_profesor = mod_prof if mod_prof else list(periodos["profesor"])
+            periodos_sala = mod_sala if mod_sala else list(periodos["sala"])
     else:
-        periodos_profesor = list(PERIODOS_PROFESOR)
-        periodos_sala = list(PERIODOS_SALA)
+        periodos_grupo = list(periodos["grupo"])
+        periodos_profesor = list(periodos["profesor"])
+        periodos_sala = list(periodos["sala"])
 
     # Sedes a procesar
     sedes_encontradas = sorted(df_total["SEDE"].dropna().astype(str).unique())
@@ -147,13 +161,15 @@ def generar_por_grupos_semanas(
         dir_sala = parent / "sala"
         dir_grupo = parent / "grupo"
 
-        # ── 3.A PROFESOR (1_8, 9_16 - ambos con 1_16 integrado) ────
+        # ── 3.A PROFESOR (módulos integrados con ciclo completo) ────
         for p in periodos_profesor:
             progreso(paso / total_pasos, f"{sede} · Profesor ({p['nombre']})…")
             paso += 1
+            df_p = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+            if df_p.empty:
+                continue
             out_dir = dir_prof / p["id"]
             out_dir.mkdir(parents=True, exist_ok=True)
-            df_p = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
             ctx_p = ContextoSede(
                 sede=sede,
                 df=df_p,
@@ -163,13 +179,15 @@ def generar_por_grupos_semanas(
             )
             generar_vista_docentes(ctx_p, out_dir, modulo_nombre=p.get("subtitulo"))
 
-        # ── 3.B SALA (1_8, 9_16 - con ocupaciones de 1_16 integradas) ──
+        # ── 3.B SALA (módulos integrados con ciclo completo) ───────
         for p in periodos_sala:
             progreso(paso / total_pasos, f"{sede} · Sala ({p['nombre']})…")
             paso += 1
+            df_s = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+            if df_s.empty:
+                continue
             out_dir = dir_sala / p["id"]
             out_dir.mkdir(parents=True, exist_ok=True)
-            df_s = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
             ctx_s = ContextoSede(
                 sede=sede,
                 df=df_s,
@@ -179,13 +197,15 @@ def generar_por_grupos_semanas(
             )
             generar_vista_salones(ctx_s, out_dir, subtitulo_turno=p.get("subtitulo"))
 
-        # ── 3.C GRUPO (1_16, 1_8, 9_16) ───────────────────────────
+        # ── 3.C GRUPO (por periodo detectado) ──────────────────────
         for p in periodos_grupo:
             progreso(paso / total_pasos, f"{sede} · Grupo ({p['nombre']})…")
             paso += 1
+            df_g = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
+            if df_g.empty:
+                continue
             out_dir = dir_grupo / p["id"]
             out_dir.mkdir(parents=True, exist_ok=True)
-            df_g = filtrar_semanas(df_sede, p["filtro"], p["vacias"])
             ctx_g = ContextoSede(
                 sede=sede,
                 df=df_g,
