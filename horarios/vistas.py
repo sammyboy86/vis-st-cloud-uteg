@@ -2,7 +2,7 @@
 """
 Vistas HTML de una sede: una grilla semanal por cada…
 
-* BLOQUE UTC  → carpeta `grupos/`
+* BLOQUE UTEG → carpeta `grupos/`
 * DOCENTE     → carpeta `docentes/`
 * SALÓN       → carpeta `salones/`
 
@@ -92,7 +92,7 @@ def _agregar(contenido: defaultdict, clave, campo: str, valor) -> None:
 
 
 def _bloques_de_fila(row: pd.Series) -> list[str]:
-    return [tok.strip() for tok in str(row.get("UTC_BLOCK", "")).split(",") if str(tok).strip()]
+    return [tok.strip() for tok in str(row.get("UTEG_BLOCK", "")).split(",") if str(tok).strip()]
 
 
 def _hora_fin(fines: list[str]) -> str:
@@ -101,7 +101,7 @@ def _hora_fin(fines: list[str]) -> str:
 
 
 # ═════════════════════════════════════════════════════════════
-# Vista por BLOQUE UTC
+# Vista por BLOQUE UTEG
 # ═════════════════════════════════════════════════════════════
 
 def _celda_bloque(info: dict) -> str:
@@ -119,8 +119,8 @@ def generar_vista_bloques(
     subtitulo_turno: str | None = None,
 ) -> None:
     df = ctx.df
-    for bloque in split_blocks(df["UTC_BLOCK"]):
-        mask = df["UTC_BLOCK"].astype(str).apply(
+    for bloque in split_blocks(df["UTEG_BLOCK"]):
+        mask = df["UTEG_BLOCK"].astype(str).apply(
             lambda s: any(tok.strip() == bloque for tok in str(s).split(","))
         )
         dfg = df[mask]

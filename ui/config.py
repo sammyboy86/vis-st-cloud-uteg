@@ -15,7 +15,7 @@ AUTH_PASSWORDS = {"pacademica2026", "pacaademica2026"}
 def configure_page():
     """Configuración principal de Streamlit (debe ser la primera llamada a st.*)."""
     st.set_page_config(
-        page_title="Horarios UTC",
+        page_title="Horarios UTEG",
         page_icon="📅",
         layout="centered",
         initial_sidebar_state="collapsed",

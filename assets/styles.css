@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════
-   Visualizador de Horarios UTC — estilos de la app Streamlit
+   Visualizador de Horarios UTEG — estilos de la app Streamlit
    Inyectado por ui/styles.py::inject_app_css()
    ════════════════════════════════════════════════════════════ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
@@ -28,7 +28,8 @@ button[data-testid="stSidebarNavButton"],
     text-align: center;
 }
 .login-card img {
-    width: 96px; margin-bottom: 1.6rem;
+    width: 150px; margin-bottom: 1.6rem;
+    background: #ffffff; border-radius: 12px; padding: 10px 18px;
     filter: drop-shadow(0 4px 12px rgba(79,139,249,.25));
 }
 .login-card .lc-title {
@@ -47,7 +48,8 @@ button[data-testid="stSidebarNavButton"],
     display: flex; align-items: center; gap: 1rem;
 }
 .app-hdr img {
-    width: 48px;
+    width: 96px;
+    background: #ffffff; border-radius: 8px; padding: 6px 10px;
     filter: drop-shadow(0 2px 8px rgba(79,139,249,.25));
 }
 .app-hdr .t h2 { font-size: 1.15rem; margin: 0; color: #fafafa; }

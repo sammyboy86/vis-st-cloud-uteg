@@ -13,7 +13,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(PROJECT_ROOT, "assets")
 
 TEMPLATE_FILE = os.path.join(ASSETS_DIR, "template_horario.html")
-LOGO_FILE = os.path.join(ASSETS_DIR, "logo_utc.png")
+LOGO_FILE = os.path.join(ASSETS_DIR, "logotipo_3uteg.svg")
 
 # ── Archivos de entrada ─────────────────────────────────────
 # Excel consolidado de respaldo (solo si no hay reportes por sede).
@@ -51,7 +51,9 @@ COLUMNAS_INTERNAS = {
     "sala": "SALA",
     "edificio": "EDIFICIO",
     "packages": "PAQUETE",
-    "utc_block": "UTC_BLOCK",
+    "uteg_block": "UTEG_BLOCK",
+    "utc_block": "UTEG_BLOCK",
+    "packages_uteg_blocks_vacancies": "VACANTES_BLOQUE",
     "packages_utc_blocks_vacancies": "VACANTES_BLOQUE",
     "NIVEL": "NIVEL",
     # Reporte por sede (español)
@@ -72,7 +74,8 @@ COLUMNAS_INTERNAS = {
     "EDIFICIO ASIGNADO": "EDIFICIO",
     "SEMANAS": "SEMANAS",
     "PAQUETES DE LA LIGA": "PAQUETE",
-    "BLOQUES UTC": "UTC_BLOCK",
+    "BLOQUES UTEG": "UTEG_BLOCK",
+    "BLOQUES UTC": "UTEG_BLOCK",
     "NIVELES BLOQUES": "NIVEL",
     "VACANTE DE PAQUETES": "VACANTES_BLOQUE",
 }
@@ -157,7 +160,7 @@ PERIODOS_SALA = [
     },
 ]
 
-# 3) GRUPO: 1_16, 1_8, 9_16 (bloques UTC)
+# 3) GRUPO: 1_16, 1_8, 9_16 (bloques UTEG)
 PERIODOS_GRUPO = [
     {
         "id": "1_16",

@@ -16,7 +16,6 @@ Estructura de salida dentro de `Horarios_<SEDE>/`:
 
 Además se escriben en `workdir` los Excel auxiliares de mapeo y packages.
 """
-import base64
 import logging
 import os
 import pathlib
@@ -39,7 +38,7 @@ from horarios.reportes_excel import (
     generar_reporte_mapeo_bloques,
     generar_reporte_packages_expandidos,
 )
-from horarios.utils import asegurar_columna_utc_block, slugify
+from horarios.utils import asegurar_columna_bloque, logo_data_uri, slugify
 from horarios.vistas import (
     ContextoSede,
     generar_vista_bloques,
@@ -83,7 +82,7 @@ def generar_reportes(
     df = _cargar_df(path_entrada, sedes_filtro, wd, loader)
     salones_map = load_salones_por_liga_dia(sedes_filtro=sedes_filtro, workdir=wd)
     template = jinja2.Template(pathlib.Path(template_path).read_text(encoding="utf8"))
-    logo_b64 = "data:image/png;base64," + base64.b64encode(pathlib.Path(logo_path).read_bytes()).decode()
+    logo_b64 = logo_data_uri(logo_path)
 
     # Normalizar nombres de vistas (compatibilidad con 'grupos', 'docentes', 'salones')
     raw_vistas = set(incluir_vistas)
@@ -188,9 +187,9 @@ def _cargar_df(path_entrada, sedes_filtro, wd, loader) -> pd.DataFrame:
     else:
         df = (loader or load_data_unificado)(path_entrada, sedes_filtro=sedes_filtro, workdir=wd)
 
-    df = asegurar_columna_utc_block(df)
-    if "UTC_BLOCK" not in df.columns:
-        raise KeyError("No se encontró la columna 'UTC_BLOCK' en el Excel.")
+    df = asegurar_columna_bloque(df)
+    if "UTEG_BLOCK" not in df.columns:
+        raise KeyError("No se encontró la columna 'UTEG_BLOCK' en el Excel.")
     return df
 
 

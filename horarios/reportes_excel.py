@@ -10,7 +10,7 @@ import logging
 import pandas as pd
 
 from horarios.bloques import build_base_to_map_por_sede, replace_last_char, transformar_bloque
-from horarios.utils import asegurar_columna_utc_block, split_lista
+from horarios.utils import asegurar_columna_bloque, split_lista
 
 
 def generar_reporte_mapeo_bloques(df: pd.DataFrame, out_path: str) -> str | None:
@@ -32,11 +32,11 @@ def generar_reporte_mapeo_bloques(df: pd.DataFrame, out_path: str) -> str | None
 
 def generar_reporte_packages_expandidos(df_base: pd.DataFrame, out_path: str) -> str | None:
     """Expande 'P1, P2' × 'B1, B2' en filas (P1, B1), (P2, B2)."""
-    df_base = asegurar_columna_utc_block(df_base)
+    df_base = asegurar_columna_bloque(df_base)
 
     col_sede = "SEDE" if "SEDE" in df_base.columns else "codigo_plantel"
     col_pkg = "PAQUETE" if "PAQUETE" in df_base.columns else "packages"
-    col_blk = "UTC_BLOCK" if "UTC_BLOCK" in df_base.columns else "utc_block"
+    col_blk = "UTEG_BLOCK" if "UTEG_BLOCK" in df_base.columns else "uteg_block"
 
     mapa_por_sede = build_base_to_map_por_sede(df_base)
 
@@ -49,12 +49,12 @@ def generar_reporte_packages_expandidos(df_base: pd.DataFrame, out_path: str) ->
             rows.append({
                 "codigo_plantel": row.get(col_sede),
                 "packages": pkg,
-                "utc_block_by_package": blk,
-                "utc_block_transformado": transformar_bloque(blk, base_to_map),
+                "uteg_block_by_package": blk,
+                "uteg_block_transformado": transformar_bloque(blk, base_to_map),
             })
 
     if not rows:
-        logging.info("Aviso: no se encontraron filas con packages/utc_block para expandir.")
+        logging.info("Aviso: no se encontraron filas con packages/uteg_block para expandir.")
         return None
 
     rep = pd.DataFrame(rows)

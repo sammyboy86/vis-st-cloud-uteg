@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Bloques UTC: parseo y "transformación" a su forma visible.
+Bloques UTEG: parseo y "transformación" a su forma visible.
 
 Un bloque como `TOR1A3` se descompone en base `TOR1A` + número `3`. Dentro de
 cada sede, los números de una misma base se ordenan y se les asigna una letra
@@ -48,7 +48,7 @@ def build_base_to_map_por_sede(df: pd.DataFrame) -> MapaBloques:
     mapa_por_sede: MapaBloques = {}
     for sede, dfx in df.groupby("SEDE"):
         base_to_nums: dict[str, set[int]] = {}
-        for b in split_blocks(dfx["UTC_BLOCK"]):
+        for b in split_blocks(dfx["UTEG_BLOCK"]):
             base, num = block_base_num(b)
             if num is not None:
                 base_to_nums.setdefault(base, set()).add(num)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Visualizador de Horarios UTC — Aplicación Streamlit
-===================================================
+Visualizador de Horarios UTEG — Aplicación Streamlit
+====================================================
 Punto de entrada principal. Orquesta los módulos de configuración,
 estilos, autenticación y flujo de pasos de la interfaz.
 """

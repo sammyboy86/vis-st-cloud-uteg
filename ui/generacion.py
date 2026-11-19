@@ -23,7 +23,7 @@ def _workdir() -> str:
     """Directorio temporal de la sesión (se crea si no existe)."""
     wd = st.session_state.get("workdir", "")
     if not (wd and os.path.exists(wd)):
-        wd = tempfile.mkdtemp(prefix="horarios_utc_")
+        wd = tempfile.mkdtemp(prefix="horarios_uteg_")
         st.session_state.workdir = wd
     return wd
 

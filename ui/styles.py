@@ -12,17 +12,24 @@ from functools import lru_cache
 import streamlit as st
 
 from horarios.config import ASSETS_DIR, LOGO_FILE
+from horarios.utils import logo_data_uri
 
 CSS_FILE = os.path.join(ASSETS_DIR, "styles.css")
 
 
 @lru_cache(maxsize=1)
 def get_logo_b64() -> str:
-    """Logo UTC en base64 (cadena vacía si no existe)."""
+    """Logo UTEG en base64 (cadena vacía si no existe)."""
     if os.path.exists(LOGO_FILE):
         with open(LOGO_FILE, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return ""
+
+
+@lru_cache(maxsize=1)
+def get_logo_data_uri() -> str:
+    """Logo UTEG como data URI base64 con MIME automático (SVG, PNG, etc.)."""
+    return logo_data_uri(LOGO_FILE)
 
 
 @lru_cache(maxsize=1)

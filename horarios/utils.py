@@ -2,6 +2,9 @@
 """
 Utilidades genéricas de texto y valores de celdas.
 """
+import base64
+import mimetypes
+import pathlib
 import re
 
 import pandas as pd
@@ -54,11 +57,25 @@ def valor_predominante(serie: pd.Series, default: str):
     return serie.mode().iat[0]
 
 
-def asegurar_columna_utc_block(df: pd.DataFrame) -> pd.DataFrame:
-    """Renombra 'utc_block' (cualquier capitalización) a 'UTC_BLOCK' si hace falta."""
-    if "UTC_BLOCK" in df.columns:
+def logo_data_uri(logo_path: str | pathlib.Path) -> str:
+    """Devuelve un data URI base64 con el MIME correcto (SVG, PNG, etc.)."""
+    path = pathlib.Path(logo_path)
+    if not path.exists():
+        return ""
+    ext = path.suffix.lower()
+    if ext == ".svg":
+        mime = "image/svg+xml"
+    else:
+        mime = mimetypes.guess_type(path.name)[0] or "image/png"
+    b64 = base64.b64encode(path.read_bytes()).decode()
+    return f"data:{mime};base64,{b64}"
+
+
+def asegurar_columna_bloque(df: pd.DataFrame) -> pd.DataFrame:
+    """Renombra 'uteg_block'/'utc_block' (cualquier capitalización) a 'UTEG_BLOCK' si hace falta."""
+    if "UTEG_BLOCK" in df.columns:
         return df
     for c in df.columns:
-        if str(c).strip().lower() == "utc_block":
-            return df.rename(columns={c: "UTC_BLOCK"})
+        if str(c).strip().lower() in ("uteg_block", "utc_block"):
+            return df.rename(columns={c: "UTEG_BLOCK"})
     return df

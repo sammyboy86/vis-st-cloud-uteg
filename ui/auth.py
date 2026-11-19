@@ -6,7 +6,7 @@ import streamlit as st
 
 from ui.config import AUTH_PASSWORDS, AUTH_USER
 from ui.generacion import borrar_workdir
-from ui.styles import get_logo_b64
+from ui.styles import get_logo_data_uri
 
 
 def is_logged_in() -> bool:
@@ -36,9 +36,9 @@ def render_login_page():
     st.markdown(
         f"""
         <div class="login-wrap"><div class="login-card">
-            <img src="data:image/png;base64,{get_logo_b64()}" alt="UTC">
+            <img src="{get_logo_data_uri()}" alt="UTEG">
             <div class="lc-title">Visualizador de Horarios</div>
-            <div class="lc-sub">Programación Académica · UTC</div>
+            <div class="lc-sub">Programación Académica · UTEG</div>
         </div></div>""",
         unsafe_allow_html=True,
     )

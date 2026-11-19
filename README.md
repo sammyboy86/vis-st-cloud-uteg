@@ -1,6 +1,6 @@
-# Visualizador y Generador de Horarios UTC 📅
+# Visualizador y Generador de Horarios UTEG 📅
 
-Aplicación web y motor de procesamiento por lotes para la generación, consulta y descarga de horarios académicos de la Universidad Tres Culturas (UTC). Transforma reportes institucionales en hojas de horario interactivas en formato HTML (por bloque, docente y salón), acompañadas de cruces en Excel y empaquetadas en archivos ZIP por sede y grupo de semanas.
+Aplicación web y motor de procesamiento por lotes para la generación, consulta y descarga de horarios académicos de UTEG. Transforma reportes institucionales en hojas de horario interactivas en formato HTML (por bloque, docente y salón), acompañadas de cruces en Excel y empaquetadas en archivos ZIP por sede y grupo de semanas.
 
 ---
 
@@ -33,7 +33,7 @@ El proyecto está diseñado bajo una arquitectura desacoplada en tres capas prin
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │                     MOTOR DE DOMINIO                   │
-│   horarios/ (Carga, Bloques UTC, Grillas, Vistas HTML, │
+│   horarios/ (Carga, Bloques UTEG, Grillas, Vistas HTML, │
 │              Reportes Excel, Pipeline de semanas)      │
 └───────────────────────────┬────────────────────────────┘
                             │
@@ -44,7 +44,7 @@ El proyecto está diseñado bajo una arquitectura desacoplada en tres capas prin
 └────────────────────────────────────────────────────────┘
 ```
 
-- **Motor Central (`horarios/`)**: Biblioteca pura de Python (sin dependencias de Streamlit) que encapsula la lógica de parseo, normalización de sedes, cálculo de bloques UTC, resolución de salones por día, armado de cuadrículas de tiempo y compresión.
+- **Motor Central (`horarios/`)**: Biblioteca pura de Python (sin dependencias de Streamlit) que encapsula la lógica de parseo, normalización de sedes, cálculo de bloques UTEG, resolución de salones por día, armado de cuadrículas de tiempo y compresión.
 - **Capa de Presentación (`ui/` + `app.py`)**: Interfaz web reactiva y moderna construida con Streamlit. Guía al usuario en un flujo paso a paso, gestiona la sesión temporal y ofrece previsualizaciones HTML embebidas.
 - **Entradas CLI (`generar_reportes.py`, `run_filtrado.py`)**: Scripts directos de terminal pensados para automatización o ejecución rápida sin levantar un servidor web.
 
@@ -62,7 +62,7 @@ El proyecto está diseñado bajo una arquitectura desacoplada en tres capas prin
 │
 ├── assets/                     # Recursos visuales y plantillas
 │   ├── downloading.gif         # Animación para confirmación de descargas
-│   ├── logo_utc.png            # Logotipo oficial UTC para reportes y cabecera
+│   ├── logotipo_3uteg.svg      # Logotipo oficial UTEG para reportes y cabecera
 │   ├── styles.css              # Hoja de estilos CSS de la aplicación web
 │   └── template_horario.html   # Plantilla Jinja2 para la grilla semanal HTML
 │
@@ -70,7 +70,7 @@ El proyecto está diseñado bajo una arquitectura desacoplada en tres capas prin
 │   ├── __init__.py             # API pública del motor de horarios
 │   ├── config.py               # Constantes: turnos, días, grupos de semanas, sedes
 │   ├── carga.py                # Lectura y unificación de archivos Excel (.xlsx)
-│   ├── bloques.py              # Parseo de códigos UTC y asignación de letras
+│   ├── bloques.py              # Parseo de códigos UTEG y asignación de letras
 │   ├── grilla.py               # Cuadrícula de tiempo (30 min) y parseo de horarios
 │   ├── vistas.py               # Generación de HTML por Bloque, Docente y Salón
 │   ├── reportes_excel.py       # Cruces auxiliares (Mapeo y Packages expandidos)
@@ -97,7 +97,7 @@ El motor acepta los siguientes archivos de entrada en formato Excel (`.xlsx`):
 ### 1. Reportes por Sede (Formato principal recomendado)
 Archivos con patrón `Reporte Horarios y Paquetes - Proceso *.xlsx`.
 Contienen la programación de asignaturas de cada plantel:
-* **Columnas esperadas**: `CAMPUS PLANTEL`, `MODALIDAD`, `JORNADA`, `CARRERA`, `CURRICULO`, `ASIGNATURA`, `NOMBRE ASIGNATURA`, `GRUPO`, `LIGA`, `HORARIOS DE LIGA`, `ID DOCENTE`, `NOMBRE DOCENTE`, `SALA ASIGNADA`, `SEMANAS`, `PAQUETES DE LA LIGA`, `BLOQUES UTC`, `NIVELES BLOQUES`, `VACANTE DE PAQUETES`.
+* **Columnas esperadas**: `CAMPUS PLANTEL`, `MODALIDAD`, `JORNADA`, `CARRERA`, `CURRICULO`, `ASIGNATURA`, `NOMBRE ASIGNATURA`, `GRUPO`, `LIGA`, `HORARIOS DE LIGA`, `ID DOCENTE`, `NOMBRE DOCENTE`, `SALA ASIGNADA`, `SEMANAS`, `PAQUETES DE LA LIGA`, `BLOQUES UTEG`, `NIVELES BLOQUES`, `VACANTE DE PAQUETES`.
 
 ### 2. Reporte de Secciones (Salones reales por día y edificio)
 Archivos con patrón `Resultados*Secciones*Proceso*.xlsx` (o archivos que contengan la palabra `secciones` en el nombre):
@@ -106,7 +106,7 @@ Archivos con patrón `Resultados*Secciones*Proceso*.xlsx` (o archivos que conten
 
 ### 3. Excel Consolidado (Alternativa de respaldo)
 Si no existen reportes individuales por sede, el sistema busca un archivo único consolidado (por defecto `entrada_unificada.xlsx` o cualquier `.xlsx` válido presente):
-* **Columnas**: `codigo_plantel`, `codigo_modalidad`, `codigo_jornada`, `codigo_programa`, `codigo_curriculo`, `course_code`, `course_name`, `group_label`, `link_code`, `group_schedule`, `instructor_code`, `instructor_name`, `sala`, `packages`, `utc_block`, etc.
+* **Columnas**: `codigo_plantel`, `codigo_modalidad`, `codigo_jornada`, `codigo_programa`, `codigo_curriculo`, `course_code`, `course_name`, `group_label`, `link_code`, `group_schedule`, `instructor_code`, `instructor_name`, `sala`, `packages`, `uteg_block`, etc.
 
 ---
 
@@ -127,18 +127,18 @@ Horarios_<SEDE>/
 │   └── 9_16/                      # Semanas 9 a 16 (ocupaciones 9–16 + ocupaciones de 1–16)
 │                                  # (<SEDE>_<SALON>.html)
 └── grupo/
-    ├── 1_16/                      # Semanas 1 a 16: Bloques UTC semestrales
+    ├── 1_16/                      # Semanas 1 a 16: Bloques UTEG semestrales
     │                              # (<SEDE>_<BLOQUE>.html)
-    ├── 1_8/                       # Semanas 1 a 8: Bloques UTC modulares
+    ├── 1_8/                       # Semanas 1 a 8: Bloques UTEG modulares
     │                              # (<SEDE>_<BLOQUE>.html)
-    └── 9_16/                      # Semanas 9 a 16: Bloques UTC modulares
+    └── 9_16/                      # Semanas 9 a 16: Bloques UTEG modulares
                                    # (<SEDE>_<BLOQUE>.html)
 ```
 
 > **📌 Nota sobre Profesores y Salas**:
 > 1. **Profesor**: Cada docente cuenta con dos visualizadores (`1_8` y `9_16`) que integran su carga completa para ese módulo, uniendo sus asignaturas semestrales (`1–16`) con las modulares correspondientes.
 > 2. **Sala**: Cada espacio físico cuenta con dos visualizadores (`1_8` y `9_16`). En ambos aparecen las ocupaciones del horario semestral (`1–16`) además de las modulares, asegurando que ninguna ocupación quede oculta para evitar duplicidades o cruces de aulas.
-> 3. **Grupo**: Conserva los 3 bloques independientes (`1_16`, `1_8`, `9_16`) de los bloques UTC correspondientes al plan curricular de cada grupo.
+> 3. **Grupo**: Conserva los 3 bloques independientes (`1_16`, `1_8`, `9_16`) de los bloques UTEG correspondientes al plan curricular de cada grupo.
 
 Adicionalmente, se producen dos reportes de apoyo en Excel:
 1. `Mapeo_Bloques_Transformados.xlsx`: Matriz de correspondencia entre el bloque original y la nomenclatura con letra asignada para cruces internos.
@@ -214,7 +214,7 @@ python run_filtrado.py
 | `horarios.carga` | Localiza y lee archivos Excel, normaliza nombres de columnas a un esquema canónico y construye el mapa de salones por día. |
 | `horarios.bloques` | Analiza cadenas de bloques (`TOR1A1`, `TOR1A2`), agrupa por base y numera con letras consecutivas. |
 | `horarios.grilla` | Parsea strings de horario (`Lu(07:00-09:00)`), calcula franjas de 30 minutos y genera la estructura de tabla con `rowspan`. |
-| `horarios.vistas` | Construye los datos agregados para cada perspectiva (bloques UTC, docentes y aulas) y renderiza la plantilla HTML. |
+| `horarios.vistas` | Construye los datos agregados para cada perspectiva (bloques UTEG, docentes y aulas) y renderiza la plantilla HTML. |
 | `horarios.reportes_excel` | Exporta los archivos Excel auxiliares de mapeo y expansión de paquetes. |
 | `horarios.pipeline` | Itera sobre los grupos de semanas, invoca la generación y comprime el árbol final en archivos `.zip`. |
 | `ui.styles` | Inyecta `assets/styles.css`, provee el logo en Base64 y maqueta los contenedores visuales de cada paso. |

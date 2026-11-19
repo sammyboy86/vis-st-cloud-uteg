@@ -12,13 +12,12 @@ Organización de directorios dentro de `Horarios_<SEDE>/`:
     │   ├── 1_8/     (ocupaciones de sala de semanas 1–8 y ocupaciones de 1–16)
     │   └── 9_16/    (ocupaciones de sala de semanas 9–16 y ocupaciones de 1–16)
     └── grupo/
-        ├── 1_16/    (bloques UTC de semanas 1–16)
-        ├── 1_8/     (bloques UTC de semanas 1–8)
-        └── 9_16/    (bloques UTC de semanas 9–16)
+        ├── 1_16/    (bloques UTEG de semanas 1–16)
+        ├── 1_8/     (bloques UTEG de semanas 1–8)
+        └── 9_16/    (bloques UTEG de semanas 9–16)
 
 Cada sede se empaqueta en `Horarios_<SEDE>.zip`.
 """
-import base64
 import logging
 import os
 import pathlib
@@ -41,7 +40,7 @@ from horarios.reportes_excel import (
     generar_reporte_mapeo_bloques,
     generar_reporte_packages_expandidos,
 )
-from horarios.utils import asegurar_columna_utc_block, slugify
+from horarios.utils import asegurar_columna_bloque, logo_data_uri, slugify
 from horarios.vistas import (
     ContextoSede,
     generar_vista_bloques,
@@ -90,7 +89,7 @@ def generar_por_grupos_semanas(
     # 1. Cargar datos consolidados y mapa de salones reales
     progreso(0.02, "Cargando datos y reportes de secciones…")
     df_total = load_data_unificado(sedes_filtro=sedes_filtro, workdir=str(wd))
-    df_total = asegurar_columna_utc_block(df_total)
+    df_total = asegurar_columna_bloque(df_total)
     salones_map = load_salones_por_liga_dia(sedes_filtro=sedes_filtro, workdir=str(wd))
 
     # Cargar plantilla y logo
@@ -102,7 +101,7 @@ def generar_por_grupos_semanas(
     logo_path = wd / LOGO_FILE if not os.path.isabs(LOGO_FILE) else pathlib.Path(LOGO_FILE)
     if not logo_path.exists():
         logo_path = pathlib.Path(LOGO_FILE)
-    logo_b64 = "data:image/png;base64," + base64.b64encode(logo_path.read_bytes()).decode()
+    logo_b64 = logo_data_uri(logo_path)
 
     # 2. Determinar periodos activos según selección
     active_ids = {g["id"] for g in grupos} if grupos else {"1_16", "1_8", "9_16"}

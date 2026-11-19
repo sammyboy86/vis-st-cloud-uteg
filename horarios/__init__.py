@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Motor de generación de horarios UTC (sin dependencias de Streamlit).
+Motor de generación de horarios UTEG (sin dependencias de Streamlit).
 
 Módulos, en el orden en que fluyen los datos:
 
     config          constantes: patrones de archivo, días, turnos, sedes, semanas
     carga           lectura de los Excel de entrada → DataFrame normalizado
-    bloques         parseo de bloques UTC y su letra visible
+    bloques         parseo de bloques UTEG y su letra visible
     grilla          grilla semanal de 30 min y parseo de "HORARIOS DE LIGA"
     vistas          HTML por bloque / docente / salón
     reportes_excel  Excel auxiliares (mapeo de bloques, packages expandidos)

@@ -16,7 +16,7 @@ from ui.auth import logout
 from ui.descarga import show_download_dialog
 from ui.generacion import prepare_workdir, run_generation
 from ui.styles import (
-    get_logo_b64,
+    get_logo_data_uri,
     render_step_card_start,
     render_step_connector,
 )
@@ -24,12 +24,12 @@ from ui.styles import (
 
 def render_header():
     """Renderiza la cabecera superior y el botón para cerrar sesión."""
-    logo = get_logo_b64()
+    logo = get_logo_data_uri()
     lcol, rcol = st.columns([5, 1])
     with lcol:
         st.markdown(
             f"""<div class="app-hdr">
-            <img src="data:image/png;base64,{logo}" alt="UTC">
+            <img src="{logo}" alt="UTEG">
             <div class="t">
                 <h2>📅 Visualizador de Horarios</h2>
                 <p>Genera reportes HTML de horarios por sede y grupo de semanas</p>
@@ -114,7 +114,7 @@ def step_3_weeks():
         "ℹ️ **Estructura organizada de salida:**\n"
         "- **profesor/**: `1_8` y `9_16` (materias modulares combinadas con semestrales 1–16)\n"
         "- **sala/**: `1_8` y `9_16` (ocupaciones modulares y ocupaciones semestrales 1–16)\n"
-        "- **grupo/**: `1_16`, `1_8` y `9_16` (bloques UTC)"
+        "- **grupo/**: `1_16`, `1_8` y `9_16` (bloques UTEG)"
     )
 
     render_step_connector()
