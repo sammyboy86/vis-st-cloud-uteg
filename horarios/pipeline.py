@@ -28,7 +28,7 @@ from typing import Callable, Iterable
 import jinja2
 import pandas as pd
 
-from horarios.carga import load_data_unificado, load_salones_por_liga_dia
+from horarios.carga import load_data_unificado, salones_map_para
 from horarios.config import (
     LOGO_FILE,
     TEMPLATE_FILE,
@@ -86,11 +86,12 @@ def generar_por_grupos_semanas(
     progreso = on_progress or (lambda _f, _m: None)
     sedes_filtro = {str(s).strip().upper() for s in sedes} if sedes else None
 
-    # 1. Cargar datos consolidados y mapa de salones reales
-    progreso(0.02, "Cargando datos y reportes de secciones…")
+    # 1. Cargar datos consolidados (Secciones como fuente única si existe) y,
+    #    solo con la fuente de respaldo, el mapa de salones reales por día
+    progreso(0.02, "Cargando reporte de secciones…")
     df_total = load_data_unificado(sedes_filtro=sedes_filtro, workdir=str(wd))
     df_total = asegurar_columna_bloque(df_total)
-    salones_map = load_salones_por_liga_dia(sedes_filtro=sedes_filtro, workdir=str(wd))
+    salones_map = salones_map_para(df_total, sedes_filtro=sedes_filtro, workdir=str(wd))
 
     # Cargar plantilla y logo
     template_path = wd / TEMPLATE_FILE if not os.path.isabs(TEMPLATE_FILE) else pathlib.Path(TEMPLATE_FILE)

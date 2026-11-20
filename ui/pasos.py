@@ -48,32 +48,23 @@ def render_header():
 
 
 def step_1_upload():
-    """Paso 1: Subida de archivos de reporte y secciones."""
-    render_step_card_start(1, "📁 Subir archivos")
+    """Paso 1: Subida del reporte de Secciones (fuente única de datos)."""
+    render_step_card_start(1, "📁 Subir archivo")
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        reporte = st.file_uploader(
-            "Reporte Horarios y Paquetes (.xlsx)",
-            type=["xlsx"],
-            key="up_rep",
-            help="Reporte Horarios y Paquetes - Proceso NNN.xlsx",
-        )
-    with col_b:
-        secciones = st.file_uploader(
-            "Resultados Secciones (.xlsx) ",
-            type=["xlsx"],
-            key="up_sec",
-            help="Resultados - Secciones - Proceso NNN.xlsx · salones y edificios por día",
-        )
+    secciones = st.file_uploader(
+        "Resultados Secciones (.xlsx)",
+        type=["xlsx"],
+        key="up_sec",
+        help="Resultados - Secciones - Proceso NNN.xlsx · sesiones, salones, docentes, semanas y paquetes",
+    )
 
-    if reporte:
-        st.success(f"✅ **{reporte.name}** cargado correctamente")
+    if secciones:
+        st.success(f"✅ **{secciones.name}** cargado correctamente")
     else:
-        st.info("👆 Suba el reporte para continuar")
+        st.info("👆 Suba el reporte de Secciones para continuar")
 
     render_step_connector()
-    return reporte, secciones
+    return secciones
 
 
 def step_2_sedes(reporte):
@@ -142,9 +133,9 @@ def step_3_weeks(reporte=None):
 
 
 
-def step_4_generate(reporte, secciones, sedes_final, active):
+def step_4_generate(secciones, sedes_final, active):
     """Paso 4: Resumen de configuración y ejecución del motor."""
-    ready = bool(reporte and sedes_final and active)
+    ready = bool(secciones and sedes_final and active)
 
     render_step_card_start(4, "🚀 Generar horarios")
 
@@ -152,13 +143,13 @@ def step_4_generate(reporte, secciones, sedes_final, active):
         c1, c2, c3 = st.columns(3)
         c1.metric("Sedes", len(sedes_final))
         c2.metric("Grupos de semanas", len(active))
-        c3.metric("Secciones", "✅ Incluido" if secciones else "⚠️ Sin archivo")
+        c3.metric("Fuente", "Secciones ✅")
         st.markdown("")
 
     if not ready:
         missing = []
-        if not reporte:
-            missing.append("reporte")
+        if not secciones:
+            missing.append("reporte de secciones")
         if not sedes_final:
             missing.append("sedes")
         if not active:
@@ -174,7 +165,7 @@ def step_4_generate(reporte, secciones, sedes_final, active):
 
     if clicked and ready:
         try:
-            wd = prepare_workdir(reporte, secciones)
+            wd = prepare_workdir(secciones)
             zips = run_generation(wd, sedes_final, active)
 
             # Persistir rutas de resultados en el estado de sesión (ligero en RAM)
@@ -339,9 +330,9 @@ def step_6_preview():
 def render_main_app():
     """Flujo vertical principal de la aplicación."""
     render_header()
-    reporte, secciones = step_1_upload()
-    sedes_final = step_2_sedes(reporte)
-    active = step_3_weeks(reporte)
-    step_4_generate(reporte, secciones, sedes_final, active)
+    secciones = step_1_upload()
+    sedes_final = step_2_sedes(secciones)
+    active = step_3_weeks(secciones)
+    step_4_generate(secciones, sedes_final, active)
     step_5_downloads()
     step_6_preview()

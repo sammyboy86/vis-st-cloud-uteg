@@ -22,9 +22,21 @@ LOGO_FILE = os.path.join(ASSETS_DIR, "logotipo_3uteg.svg")
 RUTA_ENTRADA = "entrada_unificada.xlsx"
 # Reportes individuales por sede.
 PATRON_REPORTE_SEDE = "Reporte Horarios y Paquetes - Proceso *.xlsx"
-# Reporte con el salón REAL de cada sesión (una fila por LIGA + día). Se usa para
-# corregir el salón único por liga que trae "Reporte Horarios y Paquetes".
+# Reporte de Secciones: FUENTE PRINCIPAL. Una fila por sesión semanal (SESION ID)
+# × currículo participante, con día, horario, salón, docente, semanas y paquetes.
+# Si existe con las columnas mínimas, se usa como única fuente de datos.
 PATRON_SECCIONES = "Resultados*Secciones*Proceso*.xlsx"
+# Columnas mínimas para usar Secciones como fuente principal.
+COLUMNAS_SECCIONES_REQUERIDAS = {"SEDE", "DIA", "HORA INICIO", "HORA FIN"}
+# Renombrado Secciones → esquema interno (las demás columnas ya coinciden:
+# SEDE, JORNADA, ASIGNATURA, NOMBRE, SALA, EDIFICIO, CURRICULO, NIVEL).
+COLUMNAS_SECCIONES = {
+    "LIGAS": "LIGA",
+    "DOCENTE CODIGO": "DOCENTE_ID",
+    "DOCENTE NOMBRE": "DOCENTE_NOMBRE",
+    "PAQUETES": "PAQUETE",
+    "SESION ID": "SESION_ID",
+}
 
 # Palabras que descartan un .xlsx como candidato a "Excel consolidado".
 SKIP_XLSX_KEYWORDS = (
@@ -90,6 +102,8 @@ DIA_LETRA = {
 }
 # El reporte de Secciones codifica el día como número (1=Lunes … 7=Domingo).
 DIA_NUM_TO_LETRA = {1: "L", 2: "M", 3: "W", 4: "J", 5: "V", 6: "S", 7: "D"}
+# Letra interna → abreviatura usada en el formato "Lu(07:00-09:00)".
+DIA_LETRA_ABREV = {"L": "Lu", "M": "Ma", "W": "Mi", "J": "Ju", "V": "Vi", "S": "Sa", "D": "Do"}
 # Abreviaturas que aparecen en "HORARIOS DE LIGA" (Lu, Ma, Mi, …) → letra interna.
 DIA_PREFIX = {
     "L": "L", "M": "M", "W": "W", "J": "J", "V": "V", "S": "S", "D": "D", "F": "D",
@@ -212,6 +226,22 @@ def parsear_rango_semanas(valor: str) -> tuple[int, int] | None:
         return None
     ini, fin = int(m.group(1)), int(m.group(2))
     return (ini, fin) if ini <= fin else (fin, ini)
+
+
+def rango_desde_bits(bits: str) -> str | None:
+    """Máscara de semanas → etiqueta SEMANAS.
+
+    '11111110000000' → '(1 - 7)';  '00000001111111' → '(8 - 14)';
+    rachas no contiguas se unen con ', ' ('1100011' → '(1 - 2), (6 - 7)').
+    """
+    rachas, ini = [], None
+    for i, b in enumerate(str(bits).strip() + "0", start=1):
+        if b == "1" and ini is None:
+            ini = i
+        elif b != "1" and ini is not None:
+            rachas.append(f"({ini} - {i - 1})")
+            ini = None
+    return ", ".join(rachas) or None
 
 
 def etiqueta_periodo(period_id: str) -> str:

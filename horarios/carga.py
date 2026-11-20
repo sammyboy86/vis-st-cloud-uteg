@@ -3,28 +3,36 @@
 Lectura de los Excel de entrada.
 
 Fuentes soportadas (en orden de preferencia):
-  1. Reportes por sede  → "Reporte Horarios y Paquetes - Proceso *.xlsx"
-  2. Excel consolidado  → cualquier otro .xlsx de la carpeta (respaldo)
-  3. Reporte Secciones  → "Resultados*Secciones*Proceso*.xlsx" (salón real por día)
+  1. Reporte Secciones  → "Resultados*Secciones*Proceso*.xlsx" (FUENTE ÚNICA:
+     una fila por sesión con día, horario, salón, docente, semanas y paquetes;
+     los bloques UTEG se reconstruyen a partir de los paquetes)
+  2. Reportes por sede  → "Reporte Horarios y Paquetes - Proceso *.xlsx" (respaldo)
+  3. Excel consolidado  → cualquier otro .xlsx de la carpeta (respaldo)
 
 Todas las tablas se devuelven con el esquema interno de `config.COLUMNAS_INTERNAS`.
 """
+import datetime as dt
 import glob
 import logging
 import os
+import re
 
 import pandas as pd
 
 from horarios.config import (
     COLUMNAS_INTERNAS,
+    COLUMNAS_SECCIONES,
+    COLUMNAS_SECCIONES_REQUERIDAS,
     COLUMNAS_SEDE,
+    DIA_LETRA_ABREV,
     DIA_NUM_TO_LETRA,
     PATRON_REPORTE_SEDE,
     PATRON_SECCIONES,
     RUTA_ENTRADA,
     SKIP_XLSX_KEYWORDS,
+    rango_desde_bits,
 )
-from horarios.utils import formato_sala, split_lista
+from horarios.utils import formato_sala, limpiar_texto, split_lista
 
 # Tipo del mapa de salones: (SEDE, LIGA, letra_día) → "SALA - EDIFICIO"
 SalonesMap = dict[tuple[str, str, str], str]
@@ -131,7 +139,11 @@ def detect_sedes(archivo) -> list[str]:
 
 
 def detect_semanas(archivo) -> list[str]:
-    """Valores únicos de la columna `SEMANAS` en un Excel (lee solo esa columna)."""
+    """Valores únicos de semanas en un Excel (lee solo las columnas necesarias).
+
+    Usa la columna `SEMANAS` (Reporte Horarios y Paquetes) o, si no existe, la
+    máscara `S1…Sn` / `SEMANAS CODIGO` del reporte de Secciones.
+    """
     try:
         _rewind(archivo)
         header = pd.read_excel(archivo, engine="openpyxl", nrows=0)
@@ -141,7 +153,15 @@ def detect_semanas(archivo) -> list[str]:
             df = pd.read_excel(archivo, engine="openpyxl", usecols=[col])
             _rewind(archivo)
             vals = df[col].dropna().astype(str).str.strip()
-            return sorted(v for v in vals.unique().tolist() if v and v.lower() not in ("nan", "none", "<na>"))
+        else:
+            cols = [c for c in header.columns if _es_columna_semana(c) or str(c).strip() == "SEMANAS CODIGO"]
+            if not cols:
+                return []
+            df = pd.read_excel(archivo, engine="openpyxl", usecols=cols)
+            _rewind(archivo)
+            df.columns = [str(c).strip() for c in df.columns]
+            vals = _semanas_secciones(df).dropna().astype(str)
+        return sorted(v for v in vals.unique().tolist() if v and v.lower() not in ("nan", "none", "<na>"))
     except Exception:
         _rewind(archivo)
     return []
@@ -178,12 +198,19 @@ def _filtrar_sedes(df: pd.DataFrame, sedes: set[str]) -> pd.DataFrame:
 
 
 def load_data_unificado(path_entrada=None, sedes_filtro=None, workdir=None) -> pd.DataFrame:
-    """Carga los reportes por sede y los concatena; si no hay, usa un Excel consolidado.
+    """Carga la fuente principal de datos.
+
+    1. Reporte de Secciones (si existe con las columnas mínimas) → fuente única.
+    2. Reportes por sede "Horarios y Paquetes" concatenados.
+    3. Excel consolidado.
 
     sedes_filtro: set/list de códigos de plantel; solo se cargan archivos de esas sedes.
     """
     if sedes_filtro is not None:
         sedes_filtro = {str(s) for s in sedes_filtro}
+
+    if not path_entrada and find_secciones_principales(workdir=workdir):
+        return load_data_secciones(sedes_filtro=sedes_filtro, workdir=workdir)
 
     sede_files = find_sede_report_excels(workdir=workdir)
     if sede_files:
@@ -234,8 +261,179 @@ def _cargar_consolidado(path_entrada, sedes_filtro: set[str] | None, workdir) ->
 
 
 # ═════════════════════════════════════════════════════════════
+# Reporte de Secciones como fuente única
+# ═════════════════════════════════════════════════════════════
+
+def find_secciones_principales(workdir=None) -> list[str]:
+    """Reportes de Secciones con las columnas mínimas para ser fuente principal."""
+    out = []
+    for f in find_secciones_excels(workdir=workdir):
+        try:
+            header = pd.read_excel(f, engine="openpyxl", nrows=0)
+        except Exception as exc:
+            logging.warning("No se pudo leer %s: %s", f, exc)
+            continue
+        cols = {str(c).strip() for c in header.columns}
+        if COLUMNAS_SECCIONES_REQUERIDAS <= cols:
+            out.append(f)
+        else:
+            logging.info(
+                "Secciones %s sin columnas %s; solo se usará para salones.",
+                f, COLUMNAS_SECCIONES_REQUERIDAS - cols,
+            )
+    return out
+
+
+def es_base_secciones(df: pd.DataFrame) -> bool:
+    """True si el DataFrame proviene de `load_data_secciones` (salón ya resuelto por sesión)."""
+    return "SESION_ID" in df.columns
+
+
+def load_data_secciones(sedes_filtro=None, workdir=None) -> pd.DataFrame:
+    """Construye la tabla interna completa solo a partir del reporte de Secciones.
+
+    Cada fila de Secciones es una sesión semanal (SESION ID) × currículo
+    participante. Se conserva esa granularidad y se agregan:
+
+      GROUP_SCHEDULE  'Lu(08:00-11:00)'  (DIA + HORA INICIO + HORA FIN)
+      SEMANAS         '(1 - 7)'          (máscara S1…Sn / SEMANAS CODIGO)
+      UTEG_BLOCK      'AME-MATU-LIDGSEP26C-N2-P1, …'  (un bloque por paquete
+                      de la población CURRICULO + NIVEL en su sede y jornada)
+
+    El salón queda en la propia fila (SALA/EDIFICIO), por lo que no hace falta
+    el mapa (SEDE, LIGA, día) → salón.
+    """
+    archivos = find_secciones_principales(workdir=workdir)
+    if not archivos:
+        raise FileNotFoundError(
+            f"No se encontró un reporte de Secciones (patrón: {PATRON_SECCIONES}) con las columnas "
+            f"{sorted(COLUMNAS_SECCIONES_REQUERIDAS)}."
+        )
+
+    dfs = []
+    for f in archivos:
+        df = pd.read_excel(f, engine="openpyxl", sheet_name=0)
+        df.columns = [str(c).strip() for c in df.columns]
+        if sedes_filtro:
+            df = _filtrar_sedes(df, sedes_filtro)
+        if df.empty:
+            continue
+        df = _normalizar_secciones(df, f)
+        logging.info(
+            "Cargado Secciones %s: %d filas, %d sesiones, sede(s): %s",
+            f, len(df), df["SESION_ID"].nunique() if "SESION_ID" in df else len(df),
+            ", ".join(sorted(df["SEDE"].unique())),
+        )
+        dfs.append(df)
+
+    if not dfs:
+        if sedes_filtro:
+            raise ValueError("El reporte de Secciones no tiene filas para: " + ", ".join(sorted(sedes_filtro)))
+        raise ValueError("El reporte de Secciones está vacío.")
+    return pd.concat(dfs, ignore_index=True)
+
+
+def _normalizar_secciones(df: pd.DataFrame, origen: str = "") -> pd.DataFrame:
+    letras = df["DIA"].map(_letra_dia)
+    ini = df["HORA INICIO"].map(hora_hhmm)
+    fin = df["HORA FIN"].map(hora_hhmm)
+    validas = letras.notna() & ini.notna() & fin.notna()
+    if not validas.all():
+        logging.warning(
+            "Secciones %s: %d filas sin día u horario válido se omiten.", origen, int((~validas).sum())
+        )
+
+    semanas = _semanas_secciones(df)
+    df = df.rename(columns=COLUMNAS_SECCIONES)
+    df["SEDE"] = df["SEDE"].map(limpiar_texto)
+    df["GROUP_SCHEDULE"] = letras.map(DIA_LETRA_ABREV) + "(" + ini + "-" + fin + ")"
+    df["SEMANAS"] = semanas
+    if "SESION_ID" not in df.columns:
+        df["SESION_ID"] = range(len(df))
+
+    paquetes = df["PAQUETE"] if "PAQUETE" in df.columns else pd.Series("", index=df.index)
+    pkg_listas = paquetes.map(lambda v: [limpiar_texto(p) for p in split_lista(limpiar_texto(v))])
+    df["PAQUETE"] = pkg_listas.map(", ".join)
+    df["UTEG_BLOCK"] = [
+        ", ".join(_id_bloque(r, p) for p in pkgs)
+        for (_, r), pkgs in zip(df.iterrows(), pkg_listas)
+    ]
+    return df[validas].copy()
+
+
+def _id_bloque(row: pd.Series, paquete: str) -> str:
+    """Identificador legible del bloque: SEDE-JORNADA-CURRICULO-N{NIVEL}-P{paquete}.
+
+    Termina en número para que `bloques.py` (base + número → letra) siga funcionando.
+    """
+    partes = [limpiar_texto(row.get(c)) for c in ("SEDE", "JORNADA", "CURRICULO")]
+    nivel = limpiar_texto(row.get("NIVEL"))
+    return "-".join([p for p in partes if p] + [f"N{nivel}" if nivel else "N0", f"P{paquete}"])
+
+
+def _es_columna_semana(col) -> bool:
+    return re.fullmatch(r"S\d+", str(col).strip()) is not None
+
+
+def _semanas_secciones(df: pd.DataFrame) -> pd.Series:
+    """Etiqueta SEMANAS por fila a partir de S1…Sn o, en su defecto, de SEMANAS CODIGO."""
+    cols = sorted((c for c in df.columns if _es_columna_semana(c)), key=lambda c: int(str(c).strip()[1:]))
+    if cols:
+        bits = df[cols].apply(lambda s: s.map(lambda v: "1" if limpiar_texto(v) == "1" else "0"))
+        bits = bits.agg("".join, axis=1)
+    elif "SEMANAS CODIGO" in df.columns:
+        bits = df["SEMANAS CODIGO"].map(limpiar_texto)
+        # Si Excel guardó la máscara como número se pierden los ceros a la izquierda.
+        largo = int(bits.str.len().max() or 0)
+        bits = bits.str.zfill(largo)
+    else:
+        return pd.Series(pd.NA, index=df.index, dtype="object")
+    return bits.map(rango_desde_bits)
+
+
+def hora_hhmm(valor) -> str | None:
+    """Normaliza una hora de Excel a 'HH:MM'.
+
+    Acepta fracción de día (0.3333 → 08:00), datetime/time, Timedelta,
+    'HH:MM[:SS]' y enteros tipo HHMM (800, 1730).
+    """
+    if isinstance(valor, (dt.datetime, dt.time)):
+        return f"{valor:%H:%M}"
+    if valor is None or pd.isna(valor):
+        return None
+    if isinstance(valor, pd.Timedelta):
+        minutos = round(valor.total_seconds() / 60)
+    elif isinstance(valor, (int, float)):
+        f = float(valor)
+        if 0 <= f < 1:
+            minutos = round(f * 24 * 60)
+        elif f.is_integer() and 0 <= f < 2400 and int(f) % 100 < 60:
+            minutos = int(f) // 100 * 60 + int(f) % 100
+        else:
+            return None
+    else:
+        s = str(valor).strip()
+        m = re.match(r"^(\d{1,2}):(\d{2})", s)
+        if m:
+            minutos = int(m.group(1)) * 60 + int(m.group(2))
+        else:
+            try:
+                return hora_hhmm(float(s))
+            except ValueError:
+                return None
+    return f"{minutos // 60:02d}:{minutos % 60:02d}"
+
+
+# ═════════════════════════════════════════════════════════════
 # Salón real por (SEDE, LIGA, día) — reporte de Secciones
 # ═════════════════════════════════════════════════════════════
+
+def salones_map_para(df: pd.DataFrame, sedes_filtro=None, workdir=None) -> "SalonesMap":
+    """Mapa de salones solo si la base NO es Secciones (allí el salón ya va por fila)."""
+    if es_base_secciones(df):
+        return {}
+    return load_salones_por_liga_dia(sedes_filtro=sedes_filtro, workdir=workdir)
+
 
 def load_salones_por_liga_dia(sedes_filtro=None, workdir=None) -> SalonesMap:
     """Construye el mapa (SEDE, LIGA, día) → salón real (+ edificio si existe).

@@ -25,7 +25,7 @@ import zipfile
 import jinja2
 import pandas as pd
 
-from horarios.carga import load_data, load_data_unificado, load_salones_por_liga_dia
+from horarios.carga import load_data, load_data_unificado, salones_map_para
 from horarios.config import (
     CATEGORIAS_HORARIO,
     LOGO_FILE,
@@ -78,7 +78,7 @@ def generar_reportes(
     logo_path = _resolver(logo_path, wd)
 
     df = _cargar_df(path_entrada, sedes_filtro, wd, loader)
-    salones_map = load_salones_por_liga_dia(sedes_filtro=sedes_filtro, workdir=wd)
+    salones_map = salones_map_para(df, sedes_filtro=sedes_filtro, workdir=wd)
     template = jinja2.Template(pathlib.Path(template_path).read_text(encoding="utf8"))
     logo_b64 = logo_data_uri(logo_path)
 

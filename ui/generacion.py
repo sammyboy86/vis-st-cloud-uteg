@@ -35,18 +35,20 @@ def borrar_workdir():
         shutil.rmtree(wd, ignore_errors=True)
 
 
-def prepare_workdir(reporte, secciones=None) -> str:
-    """Vacía el workdir y guarda en él los archivos subidos (con su nombre original).
+def prepare_workdir(secciones) -> str:
+    """Vacía el workdir y guarda en él el reporte de Secciones subido.
 
-    El motor detecta cada archivo por su nombre, así que no se renombran.
+    El motor detecta el archivo por su nombre; si el nombre no contiene
+    'secciones' se le antepone un prefijo para que sea reconocido.
     """
     wd = pathlib.Path(_workdir())
     for item in wd.iterdir():
         shutil.rmtree(item) if item.is_dir() else item.unlink()
 
-    for archivo in (reporte, secciones):
-        if archivo:
-            (wd / archivo.name).write_bytes(archivo.getbuffer())
+    nombre = secciones.name
+    if "secciones" not in nombre.lower():
+        nombre = f"Resultados - Secciones - {nombre}"
+    (wd / nombre).write_bytes(secciones.getbuffer())
     return str(wd)
 
 

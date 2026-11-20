@@ -94,15 +94,17 @@ El proyecto está diseñado bajo una arquitectura desacoplada en tres capas prin
 
 El motor acepta los siguientes archivos de entrada en formato Excel (`.xlsx`):
 
-### 1. Reportes por Sede (Formato principal recomendado)
-Archivos con patrón `Reporte Horarios y Paquetes - Proceso *.xlsx`.
-Contienen la programación de asignaturas de cada plantel:
-* **Columnas esperadas**: `CAMPUS PLANTEL`, `MODALIDAD`, `JORNADA`, `CARRERA`, `CURRICULO`, `ASIGNATURA`, `NOMBRE ASIGNATURA`, `GRUPO`, `LIGA`, `HORARIOS DE LIGA`, `ID DOCENTE`, `NOMBRE DOCENTE`, `SALA ASIGNADA`, `SEMANAS`, `PAQUETES DE LA LIGA`, `BLOQUES UTEG`, `NIVELES BLOQUES`, `VACANTE DE PAQUETES`.
+### 1. Reporte de Secciones (Fuente única recomendada)
+Archivos con patrón `Resultados*Secciones*Proceso*.xlsx` (o archivos que contengan la palabra `secciones` en el nombre). Si el archivo trae las columnas mínimas (`SEDE`, `DIA`, `HORA INICIO`, `HORA FIN`) se usa como **única fuente de datos**:
+* **Granularidad**: una fila por sesión semanal (`SESION ID`) × currículo participante (listas cruzadas).
+* **Columnas usadas**: `SEDE`, `JORNADA`, `CURRICULO`, `NIVEL`, `ASIGNATURA`, `NOMBRE`, `LIGAS`, `DOCENTE CODIGO`, `DOCENTE NOMBRE`, `SALA`, `EDIFICIO`, `DIA` (1=Lunes…7=Domingo), `HORA INICIO`/`HORA FIN` (fracción de día de Excel), `S1…Sn` o `SEMANAS CODIGO` (máscara de semanas) y `PAQUETES`.
+* **Bloques UTEG reconstruidos**: cada paquete de una población (`CURRICULO` + `NIVEL`) en su sede y jornada es un bloque, con identificador legible `SEDE-JORNADA-CURRICULO-N{NIVEL}-P{paquete}` (p. ej. `AME-MATU-LIDGSEP26C-N2-P1`).
+* **Salón**: se toma de cada fila (salón real de la sesión), sin necesidad de cruces.
 
-### 2. Reporte de Secciones (Salones reales por día y edificio)
-Archivos con patrón `Resultados*Secciones*Proceso*.xlsx` (o archivos que contengan la palabra `secciones` en el nombre):
-* **Columnas esperadas**: `SEDE`, `LIGAS`, `DIA`, `SALA`, `EDIFICIO` (opcional).
-* **Propósito**: Corrige el salón único que reporta el archivo principal. Si una liga imparte clases en diferentes salones según el día de la semana, este archivo permite plasmar el aula y edificio exactos de cada sesión.
+### 2. Reportes por Sede "Horarios y Paquetes" (Respaldo)
+Archivos con patrón `Reporte Horarios y Paquetes - Proceso *.xlsx`. Solo se usan si no hay un reporte de Secciones completo:
+* **Columnas esperadas**: `CAMPUS PLANTEL`, `MODALIDAD`, `JORNADA`, `CARRERA`, `CURRICULO`, `ASIGNATURA`, `NOMBRE ASIGNATURA`, `GRUPO`, `LIGA`, `HORARIOS DE LIGA`, `ID DOCENTE`, `NOMBRE DOCENTE`, `SALA ASIGNADA`, `SEMANAS`, `PAQUETES DE LA LIGA`, `BLOQUES UTEG`, `NIVELES BLOQUES`, `VACANTE DE PAQUETES`.
+* En este modo, un reporte de Secciones con solo `SEDE`, `LIGAS`, `DIA`, `SALA`, `EDIFICIO` se usa para corregir el salón por día.
 
 ### 3. Excel Consolidado (Alternativa de respaldo)
 Si no existen reportes individuales por sede, el sistema busca un archivo único consolidado (por defecto `entrada_unificada.xlsx` o cualquier `.xlsx` válido presente):
@@ -179,7 +181,7 @@ streamlit run app.py
 ```
 
 La interfaz consta de 6 pasos intuitivos:
-1. **📁 Subir archivos**: Carga del Reporte de Horarios y opcionalmente el de Secciones.
+1. **📁 Subir archivo**: Carga del Reporte de Secciones (única entrada necesaria).
 2. **🏫 Seleccionar sedes**: Detección automática de campus presentes en los datos con posibilidad de agregar códigos personalizados.
 3. **📅 Seleccionar semanas**: Selección de bloques de semanas (1–16, 1–8, 9–16).
 4. **🚀 Generar horarios**: Resumen visual con métricas y barra de progreso en tiempo real.
